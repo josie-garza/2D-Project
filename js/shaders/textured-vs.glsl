@@ -6,7 +6,7 @@ Shader.source[document.currentScript.src.split('js/shaders/')[1]] = `#version 30
 
   uniform struct {
   	mat4 modelMatrix;
-    vec3 offset;
+    vec4 offset;
   } gameObject;
 
   uniform struct {
@@ -15,11 +15,11 @@ Shader.source[document.currentScript.src.split('js/shaders/')[1]] = `#version 30
 
   void main(void) {
     texCoord = vertexTexCoord;
-    if (gameObject.offset.z > 0.0) {
-      texCoord[0] *= gameObject.offset.z;
-      texCoord[0] += (gameObject.offset.x / 6.0);
-      texCoord[1] *= gameObject.offset.z;
-      texCoord[1] += (gameObject.offset.y / 6.0);
+    if (gameObject.offset[2] > 0.0) {
+      texCoord[0] *= gameObject.offset[2];
+      texCoord[0] += (gameObject.offset[0] * gameObject.offset[2]);
+      texCoord[1] *= gameObject.offset[3];
+      texCoord[1] += (gameObject.offset[1] * gameObject.offset[3]);
       texCoord[1] += 0.0025;
     }
     modelPosition = vertexPosition;

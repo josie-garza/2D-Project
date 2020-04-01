@@ -37,7 +37,7 @@ class Scene extends UniformProvider {
     this.boomMaterial = new Material(this.texturedProgram);
     this.coinMaterial = new Material(this.texturedProgram);
     this.collectedMaterial = new Material(this.texturedProgram);
-    this.hintMaterial = new Material(this.solidProgram);
+    this.shieldMaterial = new Material(this.texturedProgram);
     this.platformMaterial = new Material(this.solidProgram);
 
     this.backgroundMaterial.colorTexture.set(new Texture2D(gl, "media/background.jpg"));
@@ -47,6 +47,7 @@ class Scene extends UniformProvider {
     this.boomMaterial.colorTexture.set(new Texture2D(gl, "media/boom.png"));
     this.coinMaterial.colorTexture.set(new Texture2D(gl, "media/coins.png"));
     this.collectedMaterial.colorTexture.set(new Texture2D(gl, "media/coin.png"));
+    this.shieldMaterial.colorTexture.set(new Texture2D(gl, "media/shield.png"));
     this.platformMaterial.color.set(0.6, 0.9, 0.6, 1.0);
 
     this.backgroundMesh = new Mesh(this.backgroundMaterial, this.texturedQuadGeometry);
@@ -56,15 +57,15 @@ class Scene extends UniformProvider {
     this.boomMesh = new Mesh(this.boomMaterial, this.texturedQuadGeometry);
     this.coinMesh = new Mesh(this.coinMaterial, this.texturedQuadGeometry);
     this.collectedMesh = new Mesh(this.collectedMaterial, this.texturedQuadGeometry);
-    this.hintMesh = new Mesh(this.hintMaterial, this.circleGeometry);
+    this.shieldMesh = new Mesh(this.shieldMaterial, this.texturedQuadGeometry);
     this.platformMesh = new Mesh(this.platformMaterial, this.quadGeometry);
 
     this.background = new GameObject(this.backgroundMesh);
     this.background.update = function() {};
 
     this.avatar = new GameObject(this.avatarMesh);
-    this.avatar.offset.set(0.0, 0.0, .16666);
-    this.avatar.position.set(-18, -13);
+    this.avatar.offset.set(0.0, 0.0, .16666, .16666);
+    this.avatar.position.set(-18, -11);
 
     this.plasma = new GameObject(this.plasmaMesh);
     this.plasma.position.set(3, -13);
@@ -73,11 +74,24 @@ class Scene extends UniformProvider {
     this.coin = new GameObject(this.coinMesh);
     this.coin.position.set(-3, -6);
     this.coin.scale.set(0.75, 0.75, 1.0);
-    this.coin.offset.set(0.0, 0.0, .16666);
+    this.coin.offset.set(0.0, 0.0, .16666, .16666);
     this.coin1 = new GameObject(this.coinMesh);
     this.coin1.position.set(3, -6);
     this.coin1.scale.set(0.75, 0.75, 1.0);
-    this.coin1.offset.set(0.0, 0.0, .16666);
+    this.coin1.offset.set(0.0, 0.0, .16666, .16666);
+
+    this.shieldEnabled = false;
+    this.shields = [];
+
+    this.platform1 = new GameObject(this.platformMesh);
+    this.platform1.position.set(-13, -15);
+    this.platform1.scale.set(7, 1, 1);
+    this.platform2 = new GameObject(this.platformMesh);
+    this.platform2.position.set(0, -8);
+    this.platform2.scale.set(5, 1, 1);
+    this.platform3 = new GameObject(this.platformMesh);
+    this.platform3.position.set(13, -15);
+    this.platform3.scale.set(7, 1, 1);
 
     this.gameObjects.push(this.background);
     this.gameObjects.push(this.avatar);
@@ -87,38 +101,12 @@ class Scene extends UniformProvider {
     this.coins.push(this.coin);
     this.gameObjects.push(this.coin1);
     this.coins.push(this.coin1);
-
-
-    for (var i = 0; i < 2; i++) {
-      this.hint = new GameObject(this.hintMesh);
-      this.hint.position.set(this.avatar.position);
-      this.hint.position.x -= (11 - (2 * i));
-      this.hint.position.y += 8.5;
-      this.collected.push(this.hint);
-      this.gameObjects.push(this.hint);
-    }
-
-    for (var i = 0; i < 20; i++) {
-      var add = 0.5 * i;
-      this.platform = new GameObject(this.platformMesh);
-      this.platform.position.set(-18 + add, -15);
-      this.gameObjects.push(this.platform);
-      this.platforms.push(this.platform);
-    }
-    for (var i = 0; i < 10; i++) {
-      var add = 0.5 * i;
-      this.platform = new GameObject(this.platformMesh);
-      this.platform.position.set(-5 + add, -8);
-      this.gameObjects.push(this.platform);
-      this.platforms.push(this.platform);
-    }
-    for (var i = 0; i < 20; i++) {
-      var add = 0.5 * i;
-      this.platform = new GameObject(this.platformMesh);
-      this.platform.position.set(3 + add, -15);
-      this.gameObjects.push(this.platform);
-      this.platforms.push(this.platform);
-    }
+    this.gameObjects.push(this.platform1);
+    this.platforms.push(this.platform1);
+    this.gameObjects.push(this.platform2);
+    this.platforms.push(this.platform2);
+    this.gameObjects.push(this.platform3);
+    this.platforms.push(this.platform3);
 
     const genericMove = function(t, dt) {
       const acceleration = this.force.mul(this.invMass);
@@ -152,25 +140,35 @@ class Scene extends UniformProvider {
             this.timeAtPreviousJump = t;
             this.force.y = 1500;
             this.offset.y = 3;
-            console.log("jump newest!");
+            console.log("jump");
           }
         }
 
         for (const other of platforms) {
-          const dist = this.position.minus(other.position);
-          var dist2 = dist.dot(dist);
-          dist2 = Math.sqrt(dist2);
-
-          if (dist2 < 2) {
-            this.velocity.y = 0;
-            var factor = 100 / dist2;
-            this.force.y += factor;   
+          const minX = other.position.x - (other.scale.x);
+          const maxX = other.position.x + (other.scale.x);
+          if (this.position.x > minX && this.position.x < maxX) {
+            var ontop = false;
+            if (this.position.y > other.position.y) {
+              ontop = true;
+            }
+            const diff = Math.abs(this.position.y - other.position.y);
+            if (diff < 2) {
+              var factor = 100 / diff;
+              this.velocity.y = 0;
+              if (ontop) {
+                this.force.y += factor;
+              } else {
+                this.force.y -= factor;
+              }
+            }
           }
         }
     };
 
     this.timeAtFirstFrame = new Date().getTime();
     this.timeAtLastFrame = this.timeAtFirstFrame;
+    this.lastShieldTime = 0.0;
 
     this.avatar.move = genericMove;
     this.plasma.move = genericMove;
@@ -199,13 +197,34 @@ class Scene extends UniformProvider {
     this.camera.position.x = this.avatar.position.x;
     this.camera.update();
 
-    if (keysPressed.W) {
+    if (keysPressed.Z) {
         this.camera.windowSize.x -= 0.1; //* (16/7);
         this.camera.windowSize.y -= 0.1;
     }
-    if (keysPressed.S) {
+    if (keysPressed.X) {
         this.camera.windowSize.x += 0.1; //* (16/7);
         this.camera.windowSize.y += 0.1;
+    }
+    if (keysPressed.S) {
+      if (t - this.lastShieldTime > 1) {
+        this.lastShieldTime = t;
+        if (this.shieldEnabled) {
+          const remove = this.shields[0];
+          this.gameObjects = this.gameObjects.filter(function(value, index, arr){ return value != remove});
+          this.shields = []
+          this.shieldEnabled = false;
+        } else {
+          this.shield = new GameObject(this.shieldMesh);
+          this.shield.offset.set(0, 0, 0.2, 0.25);
+          this.shield.scale.set(2.0, 2.0, 1.0);
+          this.shield.position.y -= 0.5;
+          this.shield.parent = this.avatar;
+          console.log("shield")
+          this.shields.push(this.shield);
+          this.gameObjects.push(this.shield);
+          this.shieldEnabled = true;
+        }
+      }
     }
 
     for (var i = 0; i < this.collected.length; i ++) {
@@ -216,6 +235,19 @@ class Scene extends UniformProvider {
     gl.clearColor(0.1, 0.7, 0.99, 1.0);
     gl.clearDepth(1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    if (this.shieldEnabled) {
+      if (this.shields[0].offset.x == 5 && this.shields[0].offset.y == 4) {
+         this.shields[0].offset.x = 0;
+         this.shields[0].offset.y = 0;
+      } else {
+        if (this.shields[0].offset.x == 5) {
+          this.shields[0].offset.y += 1;
+          this.shields[0].offset.x = 0; 
+        }
+        this.shields[0].offset.x += 1;
+      }
+    }
 
     for (const bomb of this.bombs) {
       if (bomb.offset.x == 5 && bomb.offset.y == 5) {
@@ -262,12 +294,8 @@ class Scene extends UniformProvider {
         // create a new static coin
         this.new = new GameObject(this.collectedMesh);
         this.new.scale.set(0.75, 0.75, 1.0);
-        const index = this.collected.length - 1 - this.coins.length;
-        const remove = this.collected[index];
-        // replace the hint with the static coin and add it to game objects
-        this.new.position.set(this.collected[index].position.x, this.collected[index].position.y);
-        this.collected[index] = this.new;
-        this.gameObjects = this.gameObjects.filter(function(value, index, arr){ return value != remove});
+        this.new.position.set(0, -4.5);
+        this.collected.push(this.new);
         this.gameObjects.push(this.new);
       }
 
@@ -299,7 +327,7 @@ class Scene extends UniformProvider {
             this.gameObjects = this.gameObjects.filter(function(value, index, arr){ return value != projectile});
             console.log("kaboom!")
             this.new = new GameObject(this.boomMesh);
-            this.new.offset.set(0.0, 0.0, .16666);
+            this.new.offset.set(0.0, 0.0, .16666, .16666);
             this.new.position.set(projectile.position.x, projectile.position.y);
             this.gameObjects.push(this.new);
             this.bombs.push(this.new);
